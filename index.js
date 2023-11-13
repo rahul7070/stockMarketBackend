@@ -24,37 +24,64 @@ connection();
 io.on('connection', (socket) => {
     console.log('Socket connected');
 
-    socket.on('stockData', (data) => {
+    socket.on('stockData', async (data) => {
         const dailyStock = new DailyStock(data);
-        dailyStock.save();
+        await dailyStock.save();
 
-        const weeklyAverage = calculateWeeklyAverage(data);
+        const allDailyStock = await DailyStock.find({company:data.company});
+        const weeklyAverage = calculateWeeklyAverage(allDailyStock);
         const weeklyStock = new WeeklyStock({ week: getWeekNumber(), company: data.company, averagePrice: weeklyAverage });
-        weeklyStock.save();
+        await weeklyStock.save();
 
-        const monthlyAverage = calculateMonthlyAverage(data);
+        const monthlyAverage = calculateMonthlyAverage(allDailyStock);
         const monthlyStock = new MonthlyStock({ month: new Date().getMonth() + 1, company: data.company, averagePrice: monthlyAverage });
-        monthlyStock.save();
+        await monthlyStock.save();
 
-        const yearlyAverage = calculateYearlyAverage(data);
+        const yearlyAverage = calculateYearlyAverage(monthlyAverage);
         const yearlyStock = new YearlyStock({ year: new Date().getFullYear(), company: data.company, averagePrice: yearlyAverage });
-        yearlyStock.save();
+        await yearlyStock.save();
+
+        const updatedData = {
+            daily: allDailyStock,
+            weekly: weeklyStock,
+            monthly: monthlyStock,
+            yearly: yearlyStock
+        };
+
+        socket.emit("updatedData", updatedData)
+
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Socket disconnected');
     });
 });
 
 // Data filtering and change tracking
 app.use(express.json());
 
-app.post('/compareDailyAverages', async (req, res) => {
-    const todayAverage = await calculateDailyAverage(new Date());
-    const yesterdayAverage = await calculateDailyAverage(new Date(new Date() - 86400000));
 
+// to add a stock data in dailystock 
+app.post("/add", async(req, res)=>{
+    try {
+        let {company, price} = req.body;
+        let payload = new DailyStock({company, price})
+        await payload.save()
+        res.send(payload)
+    } catch (error) {
+        console.log(error)
+    }
+})
+
+app.post('/compareDailyAverages', async (req, res) => {
+    const company = req.body.company;
+    const todayAverage = await calculateDailyAverage({date:new Date(), company});
+    const yesterdayAverage = await calculateDailyAverage({date:new Date(new Date() - 86400000), company});
     const changeType = todayAverage > yesterdayAverage ? 'positive' : 'negative';
     const message = `Today's stock is ${changeType} different from yesterday.`;
 
     res.json({ message });
 });
-
 
 
 const PORT = process.env.PORT || 5000;

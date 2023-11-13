@@ -1,3 +1,6 @@
+const { DailyStock } = require("../models/dailyModel");
+
+
 // Calculate weekly average from daily data
 function calculateWeeklyAverage(data) {
     // Assuming data is an array of daily stock entries for the same company
@@ -118,9 +121,10 @@ function calculateYearlyAverage(data) {
 }
 
 
-async function calculateDailyAverage(date) {
-    const dailyStocks = await DailyStock.find({ date: { $gte: date.setHours(0, 0, 0, 0), $lt: date.setHours(23, 59, 59, 999) } });
+async function calculateDailyAverage({date, company}) {
+    const dailyStocks = await DailyStock.find({company, date: { $gte: date.setHours(0, 0, 0, 0), $lt: date.setHours(23, 59, 59, 999) } });
     const total = dailyStocks.reduce((acc, stock) => acc + stock.price, 0);
+    // console.log(total/dailyStocks.length)
     return total / dailyStocks.length;
 }
 
